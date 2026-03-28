@@ -1,5 +1,5 @@
 ﻿using Microsoft.VisualBasic;
-using Newtonsoft.Json;
+using System.Text.Json;
 using StockAnalyzer.Core.Domain;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,7 +28,7 @@ public class StockService : IStockService
         // it takes a little bit longer.
         //
         // DO NOT DO THIS IN PRODUCTION...
-        await Task.Delay((i++) * 1000);
+        await Task.Delay((i++) * 1000, cancellationToken);
 
         using (var client = new HttpClient())
         {
@@ -39,7 +39,7 @@ public class StockService : IStockService
 
             var content = await result.Content.ReadAsStringAsync();
 
-            return JsonConvert.DeserializeObject<IEnumerable<StockPrice>>(content);
+            return JsonSerializer.Deserialize<IEnumerable<StockPrice>>(content, JsonSerializerOptions.Web);
         }
     }
 }

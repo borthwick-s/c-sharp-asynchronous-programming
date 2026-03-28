@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using StockAnalyzer.Core;
+﻿using StockAnalyzer.Core;
 using StockAnalyzer.Core.Domain;
 using StockAnalyzer.Core.Services;
 using StockAnalyzer.Windows.Services;
@@ -24,6 +23,7 @@ public partial class MainWindow : Window
 {
     private static string API_URL = "https://ps-async.fekberg.com/api/stocks";
     private Stopwatch stopwatch = new Stopwatch();
+    private Random random = new Random();
 
     public MainWindow()
     {
@@ -31,91 +31,60 @@ public partial class MainWindow : Window
     }
 
 
-    CancellationTokenSource? cancellationTokenSource;
 
-    private void Search_Click(object sender, RoutedEventArgs e)
+
+
+    private async void Search_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            // NEVER DO THIS!
-            Task.Run(SearchForStocks).Wait();
-        }
-        catch(Exception ex)
-        {
-            Notes.Text = ex.Message;
-        }
-    }
+        BeforeLoadingStockData();
 
-    private async Task SearchForStocks()
-    {
-        var service = new StockService();
-        var loadingTasks = new List<Task<IEnumerable<StockPrice>>>();
-
-        foreach(var identifier in StockIdentifier.Text.Split(' ', ','))
-        {
-            var loadTask = service.GetStockPricesFor(identifier,
-                CancellationToken.None);
-
-            loadingTasks.Add(loadTask);
-        }
-
-        var data = await Task.WhenAll(loadingTasks);
-
-        Stocks.ItemsSource = data.SelectMany(stock => stock);
-    }
-
-
-    private async Task<IEnumerable<StockPrice>>
-        GetStocksFor(string identifier)
-    {
-        var service = new StockService();
-        var data = await service.GetStockPricesFor(identifier,
-            CancellationToken.None).ConfigureAwait(false);
-
-        return data.Take(5);
-    }
-
-    private static Task<List<string>> SearchForStocks(
-        CancellationToken cancellationToken    
-    )
-    {
-        return Task.Run(async () =>
-        {
-            using var stream = new StreamReader(File.OpenRead("StockPrices_Small.csv"));
-
-            var lines = new List<string>();
-
-            while (await stream.ReadLineAsync() is string line)
+        var stocks = new Dictionary<string, IEnumerable<StockPrice>>
             {
-                if(cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                lines.Add(line);
-            }
+                { "MSFT", Generate("MSFT") },
+                { "GOOGL", Generate("GOOGL") },
+                { "AAPL", Generate("AAPL") },
+                { "CAT", Generate("CAT") }
+            };
+        
 
-            return lines;
-        }, cancellationToken);
+        AfterLoadingStockData();
     }
 
-    private async Task GetStocks()
+    private StockCalculation Calculate(IEnumerable<StockPrice> prices)
     {
-        try
-        {
-            var store = new DataStore();
+        #region Start stopwatch
+        var calculation = new StockCalculation();
+        var watch = new Stopwatch();
+        watch.Start();
+        #endregion
 
-            var responseTask = store.GetStockPrices(StockIdentifier.Text);
+        var end = DateTime.UtcNow.AddSeconds(4);
 
-            Stocks.ItemsSource = await responseTask;
-        }
-        catch (Exception ex)
-        {
-            throw;
-        }
+        // Spin a loop for a few seconds to simulate load
+        while (DateTime.UtcNow < end)
+        { }
+
+        #region Return a result
+        calculation.Identifier = prices.First().Identifier;
+        calculation.Result = prices.Average(s => s.Open);
+
+        watch.Stop();
+
+        calculation.TotalSeconds = watch.Elapsed.Seconds;
+
+        return calculation;
+        #endregion
     }
 
-
-
+    private IEnumerable<StockPrice> Generate(string stockIdentifier)
+    {
+        return Enumerable.Range(1, random.Next(10, 250))
+            .Select(x => new StockPrice
+            {
+                Identifier = stockIdentifier,
+                Open = random.Next(10, 1024)
+            });
+    }
 
 
 

@@ -1,8 +1,8 @@
-﻿using Newtonsoft.Json;
-using StockAnalyzer.Core;
+﻿using StockAnalyzer.Core;
 using StockAnalyzer.Core.Domain;
 using StockAnalyzer.Core.Services;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Navigation;
+using System.Text.Json;
 
 namespace StockAnalyzer.Windows;
 
@@ -31,67 +32,28 @@ public partial class MainWindow : Window
 
     private async void Search_Click(object sender, RoutedEventArgs e)
     {
-        if (cancellationTokenSource is not null)
-        {
-            // Already have an instance of the cancellation token source?
-            // This means the button has already been pressed!
-
-            cancellationTokenSource.Cancel();
-            cancellationTokenSource.Dispose();
-            cancellationTokenSource = null;
-
-            Search.Content = "Search";
-            return;
-        }
-
-        try
-        {
-            cancellationTokenSource = new();
-
-            cancellationTokenSource.Token.Register(() => {
-                Notes.Text = "Cancellation requested";
-            });
-
-            Search.Content = "Cancel"; // Button text
-
-            BeforeLoadingStockData();
-
-            var service = new StockService();
-
-            var data = await service.GetStockPricesFor(
-                StockIdentifier.Text,
-                cancellationTokenSource.Token
-            );
-
-            Stocks.ItemsSource = data;
-        }
-        catch (Exception ex)
-        {
-            Notes.Text = ex.Message;
-        }
-        finally
-        {
-            AfterLoadingStockData();
-            cancellationTokenSource?.Dispose();
-            cancellationTokenSource = null;
-
-            Search.Content = "Search";
-        }
     }
 
+    private async Task SearchForStocks()
+    {
+        var service = new StockService();
+        var loadingTasks = new List<Task<IEnumerable<StockPrice>>>();
 
+        foreach (var identifier in StockIdentifier.Text.Split(' ', ','))
+        {
+            var loadTask = service.GetStockPricesFor(identifier,
+                CancellationToken.None);
 
+            loadingTasks.Add(loadTask);
+        }
 
+        var data = await Task.WhenAll(loadingTasks);
 
-
-
-
-
-
-
+        Stocks.ItemsSource = data.SelectMany(stock => stock);
+    }
 
     private static Task<List<string>> SearchForStocks(
-        CancellationToken cancellationToken    
+        CancellationToken cancellationToken
     )
     {
         return Task.Run(async () =>
@@ -102,7 +64,7 @@ public partial class MainWindow : Window
 
             while (await stream.ReadLineAsync() is string line)
             {
-                if(cancellationToken.IsCancellationRequested)
+                if (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
@@ -112,6 +74,44 @@ public partial class MainWindow : Window
             return lines;
         }, cancellationToken);
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private async Task<IEnumerable<StockPrice>>
+        GetStocksFor(string identifier)
+    {
+        var service = new StockService();
+        var data = await service.GetStockPricesFor(identifier,
+            CancellationToken.None).ConfigureAwait(false);
+
+        
+
+        return data.Take(5);
+    }
+
+
+
+
+
+
+
+
+
+
 
     private async Task GetStocks()
     {

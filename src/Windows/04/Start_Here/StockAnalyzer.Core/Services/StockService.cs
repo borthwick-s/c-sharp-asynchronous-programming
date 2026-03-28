@@ -1,10 +1,11 @@
-﻿using Newtonsoft.Json;
+﻿using Microsoft.VisualBasic;
 using StockAnalyzer.Core.Domain;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace StockAnalyzer.Core.Services;
 
@@ -27,7 +28,7 @@ public class StockService : IStockService
         // it takes a little bit longer.
         //
         // DO NOT DO THIS IN PRODUCTION...
-        await Task.Delay((i++) * 1000);
+        await Task.Delay((i++) * 1000, cancellationToken);
 
         using (var client = new HttpClient())
         {
@@ -38,7 +39,47 @@ public class StockService : IStockService
 
             var content = await result.Content.ReadAsStringAsync();
 
-            return JsonConvert.DeserializeObject<IEnumerable<StockPrice>>(content);
+            return JsonSerializer.Deserialize<IEnumerable<StockPrice>>(content, JsonSerializerOptions.Web);
         }
+    }
+}
+
+public class MockStockService : IStockService
+{
+    public Task<IEnumerable<StockPrice>>
+        GetStockPricesFor(string stockIdentifier, 
+        CancellationToken cancellationToken)
+    {
+        var stocks = new List<StockPrice>
+        {
+            new()
+            {
+                Identifier = "MSFT",
+                Change = 0.5m,
+                ChangePercent = 0.75m
+            },
+            new()
+            {
+                Identifier = "MSFT",
+                Change = 0.5m,
+                ChangePercent = 0.75m
+            },
+            new()
+            {
+                Identifier = "GOOGL",
+                Change = 0.5m,
+                ChangePercent = 0.75m
+            },
+            new()
+            {
+                Identifier = "GOOGL",
+                Change = 0.5m,
+                ChangePercent = 0.75m
+            }
+        };
+
+        var task = Task.FromResult(stocks.Where(stock => stock.Identifier == stockIdentifier));
+
+        return task;
     }
 }
